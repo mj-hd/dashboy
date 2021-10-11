@@ -23,8 +23,8 @@ class Bus {
   Joypad joypad = Joypad();
   Timer timer = Timer();
 
-  List<int> ram = List.filled(0x8000, 0, growable: false);
-  List<int> hram = List.filled(0x0080, 0, growable: false);
+  List<int> ram = List.filled(0x8000, 0);
+  List<int> hram = List.filled(0x0080, 0);
   Mbc mbc;
 
   Ie ie = Ie();

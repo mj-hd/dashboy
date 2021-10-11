@@ -25,12 +25,12 @@ class _LcdStatus extends BitFieldU8 {
 
   _LcdStatus.fromU8(int u8) : super.fromU8(u8);
 
-  Bit get ppuMode_0 => value(0);
-  Bit get ppuMode_1 => value(1);
+  Bit get ppuMode0 => value(0);
+  Bit get ppuMode1 => value(1);
   Bit get coincidenceFlag => value(2);
-  Bit get mode_0StatIntEnable => value(3);
-  Bit get mode_1StatIntEnable => value(4);
-  Bit get mode_2StatIntEnable => value(5);
+  Bit get mode0StatIntEnable => value(3);
+  Bit get mode1StatIntEnable => value(4);
+  Bit get mode2StatIntEnable => value(5);
   Bit get lycLyStatIntEnable => value(6);
 }
 
@@ -71,10 +71,10 @@ enum _Mode {
 }
 
 class _OamColor {
-  const _OamColor({
-    required this.index,
-    required this.color,
-    required this.blend,
+  _OamColor({
+    this.index = 0,
+    this.color = 0,
+    this.blend = false,
   });
 
   final int index;
@@ -92,9 +92,6 @@ class _OamColor {
       );
     });
   }
-
-  static _OamColor defaultInstance =
-      const _OamColor(index: 0, color: 0, blend: false);
 }
 
 class Ppu {
@@ -126,11 +123,11 @@ class Ppu {
   int _x = 0;
   int _y = 0;
 
-  final List<_Oam> _oam = List.filled(0xA0, _Oam());
+  final List<_Oam> _oam = List.generate(0xA0, (_) => _Oam());
   final List<_Oam> _buffer = [];
 
   List<int> _bgLine = List.filled(_width, 0);
-  List<_OamColor> _oamLine = List.filled(_width, _OamColor.defaultInstance);
+  List<_OamColor> _oamLine = List.generate(_width, (_) => _OamColor());
   List<int> _curBg = List.filled(8, 0);
   bool _drawingWindow = false;
 
@@ -331,7 +328,7 @@ class Ppu {
       _lines += 1;
       _buffer.clear();
       _bgLine = List.filled(_width, 0);
-      _oamLine = List.filled(_width, _OamColor.defaultInstance);
+      _oamLine = List.generate(_width, (_) => _OamColor());
     }
 
     if (_lines >= 154) {

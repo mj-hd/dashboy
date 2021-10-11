@@ -111,7 +111,7 @@ class Joypad {
   }
 
   void write(int val) {
-    _direction = !isSet(val, 5);
-    _button = !isSet(val, 4);
+    _direction = !isSet(val, 4);
+    _button = !isSet(val, 5);
   }
 }
