@@ -20,21 +20,28 @@ void main() {
   Isolate.spawn(_launchGameboy, parentRx.sendPort);
 
   ValueNotifier<ui.Image?> image = ValueNotifier(null);
+  ValueNotifier<int> fps = ValueNotifier(0);
   SendPort? childTx;
 
   parentRx.listen((e) {
     if (e is SendPort) {
       childTx = e;
     }
+
     if (e is Uint8List) {
       ui.decodeImageFromPixels(e, 256, 256, ui.PixelFormat.rgba8888, (result) {
         image.value = result;
       });
     }
+
+    if (e is int) {
+      fps.value = e;
+    }
   });
 
   runApp(MyApp(
     image: image,
+    fps: fps,
     onRomSelected: (bytes) {
       childTx?.send(FileSelectedEvent(bytes));
     },
@@ -59,26 +66,24 @@ void _launchGameboy(SendPort parentTx) async {
       final rom = Rom(message.bytes);
 
       gb.load(rom);
-
-      print('loaded');
-
       gb.reset();
-
-      print('ready');
     }
 
     if (message is KeyPressedEvent) {
       if (gb.ready) gb.press(message.key);
-      print('key pressed ${message.key}');
     }
 
     if (message is KeyReleasedEvent) {
       if (gb.ready) gb.release(message.key);
-      print('key released ${message.key}');
     }
   });
 
+  var frame = 0;
+  var fpsTotal = 0;
+
   while (true) {
+    final start = DateTime.now();
+
     if (gb.ready) {
       for (var i = 0; i < 70224; i++) {
         gb.tick();
@@ -89,7 +94,20 @@ void _launchGameboy(SendPort parentTx) async {
       parentTx.send(pixels);
     }
 
-    await Future.delayed(const Duration(milliseconds: 16));
+    final elapsed = DateTime.now().difference(start);
+    final sleep = const Duration(milliseconds: 16) - elapsed;
+    final fps = (1000 / elapsed.inMilliseconds).clamp(0, 999).floor();
+
+    frame += 1;
+    fpsTotal += fps;
+
+    if (frame >= 30) {
+      parentTx.send((fpsTotal / frame).floor());
+      frame = 0;
+      fpsTotal = 0;
+    }
+
+    await Future.delayed(sleep < Duration.zero ? Duration.zero : sleep);
   }
 }
 
@@ -115,11 +133,13 @@ class MyApp extends StatelessWidget {
   const MyApp({
     Key? key,
     required this.image,
+    required this.fps,
     required this.onRomSelected,
     required this.onKeyPressed,
     required this.onKeyReleased,
   }) : super(key: key);
 
+  final ValueNotifier<int> fps;
   final ValueNotifier<ui.Image?> image;
   final void Function(Uint8List) onRomSelected;
   final void Function(JoypadKey) onKeyPressed;
@@ -134,6 +154,7 @@ class MyApp extends StatelessWidget {
       ),
       home: MyHomePage(
         title: 'Dashboy',
+        fps: fps,
         image: image,
         onRomSelected: onRomSelected,
         onKeyPressed: onKeyPressed,
@@ -147,6 +168,7 @@ class MyHomePage extends StatefulWidget {
   const MyHomePage({
     Key? key,
     required this.title,
+    required this.fps,
     required this.image,
     required this.onRomSelected,
     required this.onKeyPressed,
@@ -154,6 +176,7 @@ class MyHomePage extends StatefulWidget {
   }) : super(key: key);
 
   final String title;
+  final ValueNotifier<int> fps;
   final ValueNotifier<ui.Image?> image;
   final void Function(Uint8List) onRomSelected;
   final void Function(JoypadKey) onKeyPressed;
@@ -176,7 +199,10 @@ class _MyHomePageState extends State<MyHomePage> {
           Expanded(
             child: Container(
               color: Colors.black,
-              child: _Screen(image: widget.image),
+              child: _Screen(
+                fps: widget.fps,
+                image: widget.image,
+              ),
             ),
           ),
           Expanded(
@@ -213,9 +239,11 @@ class _MyHomePageState extends State<MyHomePage> {
 class _Screen extends StatefulWidget {
   const _Screen({
     Key? key,
+    required this.fps,
     required this.image,
   }) : super(key: key);
 
+  final ValueNotifier<int> fps;
   final ValueNotifier<ui.Image?> image;
 
   @override
@@ -235,11 +263,29 @@ class _ScreenState extends State<_Screen> {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
-      builder: (_, constraints) => CustomPaint(
-        painter: _ScreenPainter(
-          widget.image.value,
-          constraints.maxWidth,
-        ),
+      builder: (_, constraints) => Stack(
+        children: [
+          CustomPaint(
+            painter: _ScreenPainter(
+              image: widget.image.value,
+              width: constraints.maxWidth,
+            ),
+          ),
+          Positioned(
+            top: 10,
+            right: 20,
+            left: 20,
+            height: 14,
+            child: Text(
+              widget.fps.value.toString(),
+              style: const TextStyle(
+                fontSize: 12.0,
+                color: Colors.blue,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -411,7 +457,10 @@ class _ControllerButton extends StatelessWidget {
 }
 
 class _ScreenPainter extends CustomPainter {
-  _ScreenPainter(this.image, this.width);
+  _ScreenPainter({
+    required this.image,
+    required this.width,
+  });
 
   final ui.Image? image;
   final double width;
