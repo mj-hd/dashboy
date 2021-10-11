@@ -1726,7 +1726,7 @@ class Cpu {
 
   void _complementU8A() {
     final val = _a;
-    final result = ~val;
+    final result = (~val).toU8();
 
     _a = result;
     _f.n.set();

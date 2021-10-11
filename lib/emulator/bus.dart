@@ -90,7 +90,7 @@ class Bus {
     if (0xFF4A == addr) return ppu.readWindowY();
     if (0xFF4B == addr) return ppu.readWindowX();
     if (0xFF80 <= addr && addr <= 0xFFFE) return hram[addr - 0xFF80];
-    if (0xFFFF == addr) return 0;
+    if (0xFFFF == addr) return ie.toU8();
 
     return 0;
   }
