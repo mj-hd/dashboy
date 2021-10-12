@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -78,12 +79,12 @@ void _launchGameboy(SendPort parentTx) async {
     }
   });
 
-  var frame = 0;
-  var fpsTotal = 0;
+  var prevDateTime = DateTime.now();
+  var frameCount = 0;
+  var fpsTotal = 0.0;
+  var sleep = const Duration(milliseconds: 16);
 
   while (true) {
-    final start = DateTime.now();
-
     if (gb.ready) {
       for (var i = 0; i < 70224; i++) {
         gb.tick();
@@ -94,20 +95,28 @@ void _launchGameboy(SendPort parentTx) async {
       parentTx.send(pixels);
     }
 
-    final elapsed = DateTime.now().difference(start);
-    final sleep = const Duration(milliseconds: 16) - elapsed;
-    final fps = (1000 / elapsed.inMilliseconds).clamp(0, 999).floor();
+    frameCount += 1;
 
-    frame += 1;
+    await Future.delayed(sleep);
+
+    final current = DateTime.now();
+    final elapsed = current.difference(prevDateTime);
+    final fps = (1000 / elapsed.inMilliseconds).clamp(0, 80);
+
+    sleep = Duration(
+      milliseconds: max((sleep.inMilliseconds + (fps - 60.0)).floor(), 0),
+    );
+
     fpsTotal += fps;
 
-    if (frame >= 30) {
-      parentTx.send((fpsTotal / frame).floor());
-      frame = 0;
+    if (frameCount >= 60) {
+      parentTx.send((fpsTotal / frameCount).floor());
+
+      frameCount = 0;
       fpsTotal = 0;
     }
 
-    await Future.delayed(sleep < Duration.zero ? Duration.zero : sleep);
+    prevDateTime = current;
   }
 }
 
