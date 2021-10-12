@@ -100,6 +100,7 @@ class Ppu {
   final List<int> _vram = List.filled(8 * 1024, 0);
 
   _Mode _mode = _Mode.oamScan;
+  _Mode _prevMode = _Mode.vBlank;
 
   _LcdControl _lcdControl = _LcdControl();
   _LcdStatus _lcdStatus = _LcdStatus();
@@ -360,17 +361,20 @@ class Ppu {
 
       if (240 <= _cycles && _cycles <= 455) {
         _mode = _Mode.hBlank;
-        _drawingWindow = false;
       }
     }
 
     if (_lines == 144) {
       _mode = _Mode.vBlank;
-      intVBlank = true;
     }
 
     switch (_mode) {
       case _Mode.drawing:
+        if (_prevMode != _mode) {
+          _lcdStatus.ppuMode0.set();
+          _lcdStatus.ppuMode1.set();
+        }
+
         if (_lcdControl.bgWinEnable.val) {
           if (_lcdControl.windowDisplayEnable.val) {
             _drawWindow();
@@ -384,17 +388,51 @@ class Ppu {
         }
         break;
       case _Mode.hBlank:
+        if (_prevMode != _mode) {
+          _lcdStatus.ppuMode0.reset();
+          _lcdStatus.ppuMode1.reset();
+
+          intLcdStat |= _lcdStatus.mode0StatIntEnable.val;
+
+          _lcdStatus.coincidenceFlag.val = _lines == _linesCompare;
+
+          intLcdStat |= _lcdStatus.lycLyStatIntEnable.val &&
+              _lcdStatus.coincidenceFlag.val;
+
+          _drawingWindow = false;
+        }
+
         if (_cycles < 400) {
           _putPixels(_cycles - 240);
         }
         break;
       case _Mode.oamScan:
+        if (_prevMode != _mode) {
+          _lcdStatus.ppuMode0.reset();
+          _lcdStatus.ppuMode1.set();
+
+          intLcdStat |= _lcdStatus.mode2StatIntEnable.val;
+        }
+
         if (_cycles % 2 == 0) {
           _scanOam(_cycles ~/ 2);
         }
         break;
+      case _Mode.vBlank:
+        if (_prevMode != _mode) {
+          _lcdStatus.ppuMode0.set();
+          _lcdStatus.ppuMode1.reset();
+
+          intVBlank = true;
+
+          intLcdStat |= _lcdStatus.mode1StatIntEnable.val;
+        }
+
+        break;
       default:
     }
+
+    _prevMode = _mode;
   }
 
   int read(int addr) {
