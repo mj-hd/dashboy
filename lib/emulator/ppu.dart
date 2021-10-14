@@ -134,20 +134,12 @@ class Ppu {
 
   Uint8List pixels = Uint8List(4 * _width * _height);
 
-  List<int> _colorToPixel(int color) {
-    switch (color) {
-      case 0:
-        return [0xD8, 0xF7, 0xD7, 0xFF];
-      case 1:
-        return [0x6C, 0xA6, 0x6B, 0xFF];
-      case 2:
-        return [0x20, 0x59, 0x4A, 0xFF];
-      case 3:
-        return [0x00, 0x14, 0x1B, 0xFF];
-      default:
-        return [0xFF, 0xFF, 0xFF, 0xFF];
-    }
-  }
+  static const _colorToPixel = [
+    [0xEF, 0xFD, 0xB4, 0xFF],
+    [0x8C, 0xAE, 0x04, 0xFF],
+    [0x65, 0x7F, 0x05, 0xFF],
+    [0x14, 0x19, 0x01, 0xFF],
+  ];
 
   List<int> _tileToIndexes(int tileNum, int row, bool signed) {
     var baseAddr = 0x0000;
@@ -315,7 +307,7 @@ class Ppu {
       color = oam.color;
     }
 
-    final pixel = _colorToPixel(color);
+    final pixel = _colorToPixel[color];
     for (var i = 0; i < 4; i++) {
       pixels[(x + _y * _width) * 4 + i] = pixel[i];
     }

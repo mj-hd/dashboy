@@ -11,9 +11,17 @@ import 'package:dashboy/emulator/rom.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
+import 'package:flutter/services.dart';
 
 const _width = 160.0;
 const _height = 144.0;
+const _primaryColor = Color.fromARGB(255, 67, 57, 180);
+const _buttonColor = Color.fromARGB(255, 140, 25, 82);
+const _directionColor = Color.fromARGB(255, 22, 24, 29);
+const _gbColor = Color.fromARGB(255, 204, 202, 195);
+const _seColor = Color.fromARGB(255, 117, 116, 118);
+const _paddingColor = Color.fromARGB(255, 99, 97, 110);
+const _screenColor = Color.fromARGB(255, 98, 122, 3);
 
 void main() {
   final parentRx = ReceivePort();
@@ -29,14 +37,15 @@ void main() {
       childTx = e;
     }
 
-    if (e is Uint8List) {
-      ui.decodeImageFromPixels(e, 256, 256, ui.PixelFormat.rgba8888, (result) {
+    if (e is RenderFrameEvent) {
+      ui.decodeImageFromPixels(e.frame, 256, 256, ui.PixelFormat.rgba8888,
+          (result) {
         image.value = result;
       });
     }
 
-    if (e is int) {
-      fps.value = e;
+    if (e is FpsUpdateEvent) {
+      fps.value = e.fps;
     }
   });
 
@@ -92,7 +101,7 @@ void _launchGameboy(SendPort parentTx) async {
 
       final pixels = gb.render();
 
-      parentTx.send(pixels);
+      parentTx.send(RenderFrameEvent(pixels));
     }
 
     frameCount += 1;
@@ -110,7 +119,7 @@ void _launchGameboy(SendPort parentTx) async {
     fpsTotal += fps;
 
     if (frameCount >= 60) {
-      parentTx.send((fpsTotal / frameCount).floor());
+      parentTx.send(FpsUpdateEvent((fpsTotal / frameCount).floor()));
 
       frameCount = 0;
       fpsTotal = 0;
@@ -118,6 +127,18 @@ void _launchGameboy(SendPort parentTx) async {
 
     prevDateTime = current;
   }
+}
+
+class FpsUpdateEvent {
+  FpsUpdateEvent(this.fps);
+
+  final int fps;
+}
+
+class RenderFrameEvent {
+  RenderFrameEvent(this.frame);
+
+  final Uint8List frame;
 }
 
 class FileSelectedEvent {
@@ -157,12 +178,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Dashboy',
+      title: 'DASH BOY',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primaryColor: _primaryColor,
+        canvasColor: _gbColor,
       ),
       home: MyHomePage(
-        title: 'Dashboy',
+        title: 'DASH BOY',
         fps: fps,
         image: image,
         onRomSelected: onRomSelected,
@@ -200,18 +222,22 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        foregroundColor: _primaryColor,
+        backgroundColor: _gbColor,
+        title: Text(widget.title,
+            style: const TextStyle(
+              fontSize: 32.0,
+              fontWeight: FontWeight.w800,
+              fontStyle: FontStyle.italic,
+            )),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Container(
-              color: Colors.black,
-              child: _Screen(
-                fps: widget.fps,
-                image: widget.image,
-              ),
+            child: _Screen(
+              fps: widget.fps,
+              image: widget.image,
             ),
           ),
           Expanded(
@@ -222,7 +248,7 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.small(
+      floatingActionButton: FloatingActionButton(
           onPressed: () async {
             final result = await FilePicker.platform.pickFiles();
             if (result == null) return;
@@ -237,6 +263,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
             widget.onRomSelected(bytes);
           },
+          backgroundColor: _seColor,
           child: const Icon(
             Icons.file_upload,
             color: Colors.white,
@@ -264,37 +291,50 @@ class _ScreenState extends State<_Screen> {
   void initState() {
     super.initState();
 
-    widget.image.addListener(() {
-      setState(() {});
-    });
+    widget.image.addListener(_rebuild);
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    widget.image.removeListener(_rebuild);
+  }
+
+  void _rebuild() {
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (_, constraints) => Stack(
-        children: [
-          CustomPaint(
+    return ColoredBox(
+      color: _paddingColor,
+      child: FittedBox(
+        child: Card(
+          elevation: 10,
+          clipBehavior: Clip.antiAlias,
+          child: CustomPaint(
             painter: _ScreenPainter(
               image: widget.image.value,
-              width: constraints.maxWidth,
             ),
-          ),
-          Positioned(
-            top: 10,
-            right: 20,
-            left: 20,
-            height: 14,
-            child: Text(
-              widget.fps.value.toString(),
-              style: const TextStyle(
-                fontSize: 12.0,
-                color: Colors.blue,
+            child: SizedBox(
+              width: _width,
+              height: _height,
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    widget.fps.value.toString(),
+                    style: const TextStyle(
+                      color: _primaryColor,
+                      fontSize: 6.0,
+                    ),
+                  ),
+                ),
               ),
-              textAlign: TextAlign.right,
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -310,131 +350,203 @@ class _Controller extends StatelessWidget {
   final void Function(JoypadKey key) onKeyPressed;
   final void Function(JoypadKey key) onKeyReleased;
 
+  static final _keyToJoypadKeyMap = {
+    LogicalKeyboardKey.keyZ: JoypadKey.a,
+    LogicalKeyboardKey.keyX: JoypadKey.b,
+    LogicalKeyboardKey.keyV: JoypadKey.start,
+    LogicalKeyboardKey.keyC: JoypadKey.select,
+    LogicalKeyboardKey.arrowUp: JoypadKey.up,
+    LogicalKeyboardKey.arrowDown: JoypadKey.down,
+    LogicalKeyboardKey.arrowRight: JoypadKey.right,
+    LogicalKeyboardKey.arrowLeft: JoypadKey.left,
+  };
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned(
-          top: 100,
-          right: 40,
-          width: 50,
-          height: 40,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.a),
-            onReleased: () => onKeyReleased(JoypadKey.a),
-            child: const Text(
-              'A',
-              style: TextStyle(
-                color: Colors.white,
+    return KeyboardListener(
+      onKeyEvent: (key) {
+        final joypadKey = _keyToJoypadKeyMap[key.logicalKey];
+        if (joypadKey == null) return;
+
+        if (key is KeyDownEvent) {
+          onKeyPressed(joypadKey);
+        }
+        if (key is KeyUpEvent) {
+          onKeyReleased(joypadKey);
+        }
+      },
+      focusNode: FocusNode(),
+      autofocus: true,
+      child: FittedBox(
+        child: SizedBox(
+          width: 500,
+          height: 400,
+          child: ClipPath(
+            clipBehavior: Clip.antiAlias,
+            child: CustomPaint(
+              painter: const _ControllerPainter(),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 100,
+                    right: 40,
+                    width: 60,
+                    height: 40,
+                    child: _ControllerButton(
+                      onPressed: () => onKeyPressed(JoypadKey.a),
+                      onReleased: () => onKeyReleased(JoypadKey.a),
+                      color: _buttonColor,
+                      child: const Text(
+                        'A',
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 100,
+                    right: 110,
+                    width: 60,
+                    height: 40,
+                    child: _ControllerButton(
+                      onPressed: () => onKeyPressed(JoypadKey.b),
+                      onReleased: () => onKeyReleased(JoypadKey.b),
+                      color: _buttonColor,
+                      child: const Text(
+                        'B',
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 100,
+                    left: 30,
+                    width: 50,
+                    height: 50,
+                    child: _ControllerButton(
+                      onPressed: () => onKeyPressed(JoypadKey.left),
+                      onReleased: () => onKeyReleased(JoypadKey.left),
+                      color: _directionColor,
+                      child: const Icon(
+                        Icons.arrow_left_rounded,
+                        color: Colors.white,
+                        semanticLabel: 'left',
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 100,
+                    left: 130,
+                    width: 50,
+                    height: 50,
+                    child: _ControllerButton(
+                      onPressed: () => onKeyPressed(JoypadKey.right),
+                      onReleased: () => onKeyReleased(JoypadKey.right),
+                      color: _directionColor,
+                      child: const Icon(
+                        Icons.arrow_right_rounded,
+                        color: Colors.white,
+                        semanticLabel: 'right',
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 50,
+                    left: 80,
+                    width: 50,
+                    height: 50,
+                    child: _ControllerButton(
+                      onPressed: () => onKeyPressed(JoypadKey.up),
+                      onReleased: () => onKeyReleased(JoypadKey.up),
+                      color: _directionColor,
+                      child: const Icon(
+                        Icons.arrow_drop_up_sharp,
+                        color: Colors.white,
+                        semanticLabel: 'up',
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 150,
+                    left: 80,
+                    width: 50,
+                    height: 50,
+                    child: _ControllerButton(
+                      onPressed: () => onKeyPressed(JoypadKey.down),
+                      onReleased: () => onKeyReleased(JoypadKey.down),
+                      color: _directionColor,
+                      child: const Icon(
+                        Icons.arrow_drop_down_sharp,
+                        color: Colors.white,
+                        semanticLabel: 'down',
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 80,
+                    left: 0,
+                    right: 0,
+                    height: 40,
+                    child: Center(
+                      child: SizedBox(
+                        width: 220,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Transform.rotate(
+                              angle: -1 / 6 * pi,
+                              child: SizedBox(
+                                width: 100,
+                                height: double.infinity,
+                                child: _ControllerButton(
+                                  onPressed: () =>
+                                      onKeyPressed(JoypadKey.select),
+                                  onReleased: () =>
+                                      onKeyReleased(JoypadKey.select),
+                                  color: _seColor,
+                                  child: const Text(
+                                    'SELECT',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Transform.rotate(
+                              angle: -1 / 6 * pi,
+                              child: SizedBox(
+                                width: 100,
+                                height: double.infinity,
+                                child: _ControllerButton(
+                                  onPressed: () =>
+                                      onKeyPressed(JoypadKey.start),
+                                  onReleased: () =>
+                                      onKeyReleased(JoypadKey.start),
+                                  color: _seColor,
+                                  child: const Text(
+                                    'START',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-        Positioned(
-          top: 100,
-          right: 110,
-          width: 50,
-          height: 40,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.b),
-            onReleased: () => onKeyReleased(JoypadKey.b),
-            child: const Text(
-              'B',
-              style: TextStyle(
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 100,
-          left: 30,
-          width: 50,
-          height: 50,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.left),
-            onReleased: () => onKeyReleased(JoypadKey.left),
-            child: const Icon(
-              Icons.arrow_left_rounded,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        Positioned(
-          top: 100,
-          left: 130,
-          width: 50,
-          height: 50,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.right),
-            onReleased: () => onKeyReleased(JoypadKey.right),
-            child: const Icon(
-              Icons.arrow_right_rounded,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        Positioned(
-          top: 50,
-          left: 80,
-          width: 50,
-          height: 50,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.up),
-            onReleased: () => onKeyReleased(JoypadKey.up),
-            child: const Icon(
-              Icons.arrow_upward_rounded,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        Positioned(
-          top: 150,
-          left: 80,
-          width: 50,
-          height: 50,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.down),
-            onReleased: () => onKeyReleased(JoypadKey.down),
-            child: const Icon(
-              Icons.arrow_downward_rounded,
-              color: Colors.white,
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 100,
-          left: 80,
-          width: 100,
-          height: 40,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.select),
-            onReleased: () => onKeyReleased(JoypadKey.select),
-            child: const Text(
-              'SELECT',
-              style: TextStyle(
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 100,
-          left: 200,
-          width: 100,
-          height: 40,
-          child: _ControllerButton(
-            onPressed: () => onKeyPressed(JoypadKey.start),
-            onReleased: () => onKeyReleased(JoypadKey.start),
-            child: const Text(
-              'START',
-              style: TextStyle(
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -442,43 +554,50 @@ class _Controller extends StatelessWidget {
 class _ControllerButton extends StatelessWidget {
   const _ControllerButton({
     Key? key,
+    required this.color,
     required this.onPressed,
     required this.onReleased,
     required this.child,
   }) : super(key: key);
 
+  final Color color;
   final void Function() onPressed;
   final void Function() onReleased;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.lightBlue,
-      elevation: 1,
-      child: InkWell(
-        onTapDown: (_) => onPressed(),
-        onTap: () => onReleased(),
-        child: Center(child: child),
+    return Semantics(
+      button: true,
+      child: Material(
+        color: color,
+        elevation: 5,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(8.0)),
+        ),
+        child: InkWell(
+          onTapDown: (_) => onPressed(),
+          onTap: () => onReleased(),
+          onTapCancel: () => onReleased(),
+          child: Center(child: child),
+        ),
       ),
     );
   }
 }
 
 class _ScreenPainter extends CustomPainter {
-  _ScreenPainter({
+  const _ScreenPainter({
     required this.image,
-    required this.width,
   });
 
   final ui.Image? image;
-  final double width;
 
   @override
   void paint(ui.Canvas canvas, ui.Size size) {
-    final paint = Paint();
+    final paint = Paint()..color = _screenColor;
 
-    final height = (_height / _width) * width;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
 
     if (image != null) {
       canvas.drawImageRect(
@@ -487,8 +606,8 @@ class _ScreenPainter extends CustomPainter {
         Rect.fromLTWH(
           0,
           0,
-          width,
-          height,
+          size.width,
+          size.height,
         ),
         paint,
       );
@@ -498,5 +617,54 @@ class _ScreenPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return true;
+  }
+}
+
+class _ControllerPainter extends CustomPainter {
+  const _ControllerPainter();
+
+  @override
+  void paint(ui.Canvas canvas, ui.Size size) {
+    const color = Color.fromARGB(60, 117, 113, 103);
+    final paint = Paint()..color = color;
+
+    const width = 16.0;
+    const height = 80.0;
+
+    canvas.translate(
+      size.width - 2 * 6 * width - 10.0,
+      size.height - height - 10.0,
+    );
+    canvas.rotate(-1 / 6 * pi);
+
+    for (int i = 0; i < 6; i++) {
+      final x = width * i * 2.0;
+      const y = 0.0;
+      canvas.drawRRect(
+        RRect.fromLTRBR(
+          x,
+          y,
+          x + width,
+          y + height,
+          const Radius.circular(4.0),
+        ),
+        paint,
+      );
+    }
+
+    canvas.drawRect(
+      const Rect.fromLTWH(
+        -100,
+        height - 30,
+        2 * 6 * width + 200,
+        200,
+      ),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false;
   }
 }
