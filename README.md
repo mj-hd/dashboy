@@ -2,7 +2,7 @@
 
 Gameboy Emulator by dart&flutter
 
-<img width="300" alt="kirby game playing" src="https://user-images.githubusercontent.com/6854255/136892034-d740ec9b-0cb2-4570-bf21-fb5875b04b28.jpeg">
+<img width="300" alt="kirby game playing" src="https://user-images.githubusercontent.com/6854255/137366587-3944a1b3-c7dd-4d85-b8e6-df48c1105c29.png">
 
 - Language: Dart
 - UI: Flutter
