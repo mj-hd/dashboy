@@ -56,7 +56,7 @@ class Timer {
   }
 
   void tick() {
-    _counter = _counter.wrappingAddU8(1);
+    _counter = _counter.wrappingAddU16(1);
 
     _sync();
   }
