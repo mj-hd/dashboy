@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
@@ -12,6 +13,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 
 const _width = 160.0;
 const _height = 144.0;
@@ -47,13 +49,31 @@ void main() {
     if (e is FpsUpdateEvent) {
       fps.value = e.fps;
     }
+
+    if (e is SaveStateResponseEvent) {
+      final file = File(e.fileName);
+      file.createSync();
+      file.writeAsStringSync(jsonEncode(e.data));
+    }
   });
 
   runApp(MyApp(
     image: image,
     fps: fps,
+    onPause: () {
+      childTx?.send(PauseEvent());
+    },
+    onResume: () {
+      childTx?.send(ResumeEvent());
+    },
     onRomSelected: (bytes) {
       childTx?.send(FileSelectedEvent(bytes));
+    },
+    onSaveStateRequested: (fileName) {
+      childTx?.send(SaveStateRequestEvent(fileName));
+    },
+    onLoadState: (data) {
+      childTx?.send(LoadStateEvent(data));
     },
     onKeyPressed: (key) {
       childTx?.send(KeyPressedEvent(key));
@@ -77,6 +97,27 @@ void _launchGameboy(SendPort parentTx) async {
 
       gb.load(rom);
       gb.reset();
+    }
+
+    if (message is PauseEvent) {
+      gb.pause();
+    }
+
+    if (message is ResumeEvent) {
+      gb.resume();
+    }
+
+    if (message is SaveStateRequestEvent) {
+      final data = gb.saveState();
+
+      parentTx.send(SaveStateResponseEvent(
+        message.fileName,
+        data,
+      ));
+    }
+
+    if (message is LoadStateEvent) {
+      gb.loadState(message.data);
     }
 
     if (message is KeyPressedEvent) {
@@ -159,19 +200,54 @@ class KeyReleasedEvent {
   final JoypadKey key;
 }
 
+class PauseEvent {
+  PauseEvent();
+}
+
+class ResumeEvent {
+  ResumeEvent();
+}
+
+class SaveStateRequestEvent {
+  SaveStateRequestEvent(this.fileName);
+
+  final String fileName;
+}
+
+class SaveStateResponseEvent {
+  SaveStateResponseEvent(this.fileName, this.data);
+
+  final String fileName;
+  final Map<String, dynamic> data;
+}
+
+class LoadStateEvent {
+  LoadStateEvent(this.data);
+
+  final Map<String, dynamic> data;
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({
     Key? key,
     required this.image,
     required this.fps,
+    required this.onPause,
+    required this.onResume,
     required this.onRomSelected,
+    required this.onSaveStateRequested,
+    required this.onLoadState,
     required this.onKeyPressed,
     required this.onKeyReleased,
   }) : super(key: key);
 
   final ValueNotifier<int> fps;
   final ValueNotifier<ui.Image?> image;
+  final void Function() onPause;
+  final void Function() onResume;
   final void Function(Uint8List) onRomSelected;
+  final void Function(String fileName) onSaveStateRequested;
+  final void Function(Map<String, dynamic>) onLoadState;
   final void Function(JoypadKey) onKeyPressed;
   final void Function(JoypadKey) onKeyReleased;
 
@@ -187,7 +263,11 @@ class MyApp extends StatelessWidget {
         title: 'DASH BOY',
         fps: fps,
         image: image,
+        onPause: onPause,
+        onResume: onResume,
         onRomSelected: onRomSelected,
+        onSaveStateRequested: onSaveStateRequested,
+        onLoadState: onLoadState,
         onKeyPressed: onKeyPressed,
         onKeyReleased: onKeyReleased,
       ),
@@ -195,13 +275,17 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatefulWidget {
+class MyHomePage extends HookWidget {
   const MyHomePage({
     Key? key,
     required this.title,
     required this.fps,
     required this.image,
+    required this.onPause,
+    required this.onResume,
     required this.onRomSelected,
+    required this.onSaveStateRequested,
+    required this.onLoadState,
     required this.onKeyPressed,
     required this.onKeyReleased,
   }) : super(key: key);
@@ -209,22 +293,21 @@ class MyHomePage extends StatefulWidget {
   final String title;
   final ValueNotifier<int> fps;
   final ValueNotifier<ui.Image?> image;
+  final void Function() onPause;
+  final void Function() onResume;
   final void Function(Uint8List) onRomSelected;
+  final void Function(String fileName) onSaveStateRequested;
+  final void Function(Map<String, dynamic>) onLoadState;
   final void Function(JoypadKey) onKeyPressed;
   final void Function(JoypadKey) onKeyReleased;
 
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         foregroundColor: _primaryColor,
         backgroundColor: _gbColor,
-        title: Text(widget.title,
+        title: Text(title,
             style: const TextStyle(
               fontSize: 32.0,
               fontWeight: FontWeight.w800,
@@ -236,38 +319,104 @@ class _MyHomePageState extends State<MyHomePage> {
         children: [
           Expanded(
             child: _Screen(
-              fps: widget.fps,
-              image: widget.image,
+              fps: fps,
+              image: image,
             ),
           ),
           Expanded(
             child: _Controller(
-              onKeyPressed: widget.onKeyPressed,
-              onKeyReleased: widget.onKeyReleased,
+              onKeyPressed: onKeyPressed,
+              onKeyReleased: onKeyReleased,
             ),
           ),
         ],
       ),
+      drawer: _Drawer(
+        onPause: onPause,
+        onResume: onResume,
+        onRomSelected: onRomSelected,
+        onSaveStateRequested: onSaveStateRequested,
+        onLoadState: onLoadState,
+      ),
       floatingActionButton: FloatingActionButton(
           onPressed: () async {
-            final result = await FilePicker.platform.pickFiles();
+            final result = await FilePicker.platform.pickFiles(
+              withData: true,
+            );
             if (result == null) return;
 
             var bytes = result.files.first.bytes;
 
-            if (bytes == null) {
-              final file = File(result.paths.first!);
+            if (bytes == null) return;
 
-              bytes = await file.readAsBytes();
-            }
-
-            widget.onRomSelected(bytes);
+            onRomSelected(bytes);
           },
           backgroundColor: _seColor,
           child: const Icon(
             Icons.file_upload,
             color: Colors.white,
           )),
+    );
+  }
+}
+
+class _Drawer extends HookWidget {
+  const _Drawer({
+    Key? key,
+    required this.onPause,
+    required this.onResume,
+    required this.onRomSelected,
+    required this.onSaveStateRequested,
+    required this.onLoadState,
+  }) : super(key: key);
+
+  final void Function() onPause;
+  final void Function() onResume;
+  final void Function(Uint8List) onRomSelected;
+  final void Function(String fileName) onSaveStateRequested;
+  final void Function(Map<String, dynamic>) onLoadState;
+
+  @override
+  Widget build(BuildContext context) {
+    useEffect(() {
+      onPause();
+
+      return () => onResume();
+    }, [onPause, onResume]);
+
+    return Drawer(
+      child: ListView(
+        children: [
+          ListTile(
+            title: const Text('Save State'),
+            onTap: () async {
+              final fileName = await FilePicker.platform.saveFile();
+
+              if (fileName == null) {
+                return;
+              }
+
+              onSaveStateRequested(fileName);
+            },
+          ),
+          ListTile(
+            title: const Text('Load State'),
+            onTap: () async {
+              final result = await FilePicker.platform.pickFiles(
+                withData: true,
+              );
+
+              if (result == null) return;
+
+              final bytes = result.files.first.bytes;
+
+              if (bytes == null) return;
+
+              onLoadState(jsonDecode(String.fromCharCodes(bytes)));
+            },
+          )
+        ],
+      ),
     );
   }
 }

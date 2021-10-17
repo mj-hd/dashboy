@@ -11,7 +11,9 @@ class GameBoy {
   GameBoy();
 
   late Cpu cpu;
-  bool ready = false;
+  bool _ready = false;
+
+  bool get ready => _ready;
 
   void load(Rom rom) {
     final mbc = Mbc.fromRom(rom);
@@ -21,10 +23,26 @@ class GameBoy {
     cpu = Cpu(bus: bus);
   }
 
+  void loadState(Map<String, dynamic> state) {
+    cpu = Cpu.fromJson(state);
+  }
+
+  Map<String, dynamic> saveState() {
+    return cpu.toJson();
+  }
+
+  void pause() {
+    _ready = false;
+  }
+
+  void resume() {
+    _ready = true;
+  }
+
   void reset() {
     cpu.reset();
 
-    ready = true;
+    _ready = true;
   }
 
   void press(JoypadKey key) {

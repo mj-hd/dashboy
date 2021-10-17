@@ -1,4 +1,7 @@
 import 'package:dashboy/emulator/utils.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'rom.g.dart';
 
 enum MbcType {
   romOnly,
@@ -54,6 +57,7 @@ extension MbcTypeExt on MbcType {
   }
 }
 
+@JsonSerializable()
 class Rom {
   late MbcType mbcType;
   late int romSize;
@@ -136,4 +140,7 @@ class Rom {
       throw StateError('rom size mismatch');
     }
   }
+
+  factory Rom.fromJson(Map<String, dynamic> json) => _$RomFromJson(json);
+  Map<String, dynamic> toJson() => _$RomToJson(this);
 }

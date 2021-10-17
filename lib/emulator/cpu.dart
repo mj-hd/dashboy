@@ -1,8 +1,11 @@
+import 'package:json_annotation/json_annotation.dart';
 import 'package:dashboy/emulator/bus.dart';
 import 'package:dashboy/emulator/utils.dart';
 
+part 'cpu.g.dart';
+
 class _F extends BitFieldU8 {
-  _F() : super({});
+  _F();
 
   _F.fromU8(int u8) : super.fromU8(u8);
 
@@ -12,6 +15,7 @@ class _F extends BitFieldU8 {
   Bit get z => value(7);
 }
 
+@JsonSerializable()
 class Cpu {
   Cpu({
     required this.bus,
@@ -31,6 +35,9 @@ class Cpu {
   int _left = -1;
 
   Bus bus;
+
+  factory Cpu.fromJson(Map<String, dynamic> json) => _$CpuFromJson(json);
+  Map<String, dynamic> toJson() => _$CpuToJson(this);
 
   void reset() {
     _a = 0x01;

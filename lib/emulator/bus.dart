@@ -3,9 +3,13 @@ import 'package:dashboy/emulator/mbc.dart';
 import 'package:dashboy/emulator/ppu.dart';
 import 'package:dashboy/emulator/timer.dart';
 import 'package:dashboy/emulator/utils.dart';
+import 'package:json_annotation/json_annotation.dart';
 
+part 'bus.g.dart';
+
+@JsonSerializable()
 class Ie extends BitFieldU8 {
-  Ie() : super({});
+  Ie();
 
   Ie.fromU8(int u8) : super.fromU8(u8);
 
@@ -14,8 +18,13 @@ class Ie extends BitFieldU8 {
   Bit get timer => value(2);
   Bit get serial => value(3);
   Bit get joypad => value(4);
+
+  factory Ie.fromJson(Map<String, dynamic> json) => _$IeFromJson(json);
+  Map<String, dynamic> toJson() => _$IeToJson(this);
 }
 
+@JsonSerializable()
+@MbcConverter()
 class Bus {
   Bus(this.ppu, this.mbc);
 
@@ -25,12 +34,16 @@ class Bus {
 
   List<int> ram = List.filled(0x8000, 0);
   List<int> hram = List.filled(0x0080, 0);
+
   Mbc mbc;
 
   Ie ie = Ie();
 
   bool _prevSerial = false;
   bool _intSerial = false;
+
+  factory Bus.fromJson(Map<String, dynamic> json) => _$BusFromJson(json);
+  Map<String, dynamic> toJson() => _$BusToJson(this);
 
   void tick() {
     ppu.tick();

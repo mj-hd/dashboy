@@ -1,12 +1,15 @@
 import 'dart:typed_data';
 
 import 'package:dashboy/emulator/utils.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'ppu.g.dart';
 
 const _width = 256;
 const _height = 256;
 
 class _LcdControl extends BitFieldU8 {
-  _LcdControl() : super({});
+  _LcdControl();
 
   _LcdControl.fromU8(int u8) : super.fromU8(u8);
 
@@ -21,7 +24,7 @@ class _LcdControl extends BitFieldU8 {
 }
 
 class _LcdStatus extends BitFieldU8 {
-  _LcdStatus() : super({});
+  _LcdStatus();
 
   _LcdStatus.fromU8(int u8) : super.fromU8(u8);
 
@@ -35,7 +38,7 @@ class _LcdStatus extends BitFieldU8 {
 }
 
 class _SpriteFlags extends BitFieldU8 {
-  _SpriteFlags() : super({});
+  _SpriteFlags();
 
   _SpriteFlags.fromU8(int u8) : super.fromU8(u8);
 
@@ -57,6 +60,8 @@ class _Palette {
 }
 
 class _Oam {
+  _Oam();
+
   int yPos = 0;
   int xPos = 0;
   int tileNum = 0;
@@ -94,6 +99,8 @@ class _OamColor {
   }
 }
 
+@JsonSerializable()
+@Uint8ListConverter()
 class Ppu {
   Ppu();
 
@@ -140,6 +147,9 @@ class Ppu {
     [0x65, 0x7F, 0x05, 0xFF],
     [0x14, 0x19, 0x01, 0xFF],
   ];
+
+  factory Ppu.fromJson(Map<String, dynamic> json) => _$PpuFromJson(json);
+  Map<String, dynamic> toJson() => _$PpuToJson(this);
 
   List<int> _tileToIndexes(int tileNum, int row, bool signed) {
     var baseAddr = 0x0000;

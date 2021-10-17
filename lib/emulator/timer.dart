@@ -1,4 +1,7 @@
 import 'package:dashboy/emulator/utils.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'timer.g.dart';
 
 enum _Clock {
   clock4096,
@@ -7,7 +10,10 @@ enum _Clock {
   clock16384,
 }
 
+@JsonSerializable()
 class Timer {
+  Timer();
+
   int _counter = 0;
   int _tima = 0;
   int _tma = 0;
@@ -16,6 +22,9 @@ class Timer {
   bool _prev = false;
 
   bool interrupt = false;
+
+  factory Timer.fromJson(Map<String, dynamic> json) => _$TimerFromJson(json);
+  Map<String, dynamic> toJson() => _$TimerToJson(this);
 
   void _sync() {
     var cur = false;

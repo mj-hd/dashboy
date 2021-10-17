@@ -1,4 +1,7 @@
 import 'package:dashboy/emulator/utils.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'joypad.g.dart';
 
 enum JoypadKey {
   a,
@@ -11,6 +14,7 @@ enum JoypadKey {
   start,
 }
 
+@JsonSerializable()
 class Joypad {
   Joypad();
 
@@ -27,6 +31,9 @@ class Joypad {
   bool _button = false;
 
   bool interrupt = false;
+
+  factory Joypad.fromJson(Map<String, dynamic> json) => _$JoypadFromJson(json);
+  Map<String, dynamic> toJson() => _$JoypadToJson(this);
 
   void press(JoypadKey key) {
     switch (key) {

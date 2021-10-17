@@ -1,6 +1,9 @@
 import 'dart:math';
 
 import 'package:dashboy/emulator/rom.dart';
+import 'package:json_annotation/json_annotation.dart';
+
+part 'mbc.g.dart';
 
 abstract class Mbc {
   int read(int addr);
@@ -21,10 +24,36 @@ abstract class Mbc {
   }
 }
 
-class RomOnly implements Mbc {
-  RomOnly(this._rom);
+class MbcConverter implements JsonConverter<Mbc, Map<String, dynamic>> {
+  const MbcConverter();
 
-  final Rom _rom;
+  @override
+  Mbc fromJson(Map<String, dynamic> json) {
+    if (json['romOnly'] != null) {
+      return RomOnly.fromJson(json['romOnly']);
+    }
+
+    if (json['mbc1'] != null) {
+      return Mbc1.fromJson(json['mbc1']);
+    }
+
+    throw ArgumentError.value(json);
+  }
+
+  @override
+  Map<String, dynamic> toJson(Mbc object) {
+    return {
+      if (object is RomOnly) 'romOnly': object,
+      if (object is Mbc1) 'mbc1': object,
+    };
+  }
+}
+
+@JsonSerializable()
+class RomOnly implements Mbc {
+  RomOnly(this.rom);
+
+  final Rom rom;
   final List<int> _ram = List.filled(8 * 1024, 0, growable: false);
 
   @override
@@ -33,7 +62,7 @@ class RomOnly implements Mbc {
       return _ram[addr - 0xA000];
     }
 
-    return _rom.data[addr];
+    return rom.data[addr];
   }
 
   @override
@@ -44,6 +73,10 @@ class RomOnly implements Mbc {
 
     return;
   }
+
+  factory RomOnly.fromJson(Map<String, dynamic> json) =>
+      _$RomOnlyFromJson(json);
+  Map<String, dynamic> toJson() => _$RomOnlyToJson(this);
 }
 
 enum Mbc1SelectMode {
@@ -51,10 +84,11 @@ enum Mbc1SelectMode {
   ram,
 }
 
+@JsonSerializable()
 class Mbc1 implements Mbc {
-  Mbc1(this._rom);
+  Mbc1(this.rom);
 
-  final Rom _rom;
+  final Rom rom;
   final List<int> _ram = List.filled(32 * 1024, 0, growable: false);
   int _romBank = 1;
   int _ramBank = 0;
@@ -62,10 +96,13 @@ class Mbc1 implements Mbc {
   bool _enableRam = true;
   Mbc1SelectMode _selectMode = Mbc1SelectMode.rom;
 
+  factory Mbc1.fromJson(Map<String, dynamic> json) => _$Mbc1FromJson(json);
+  Map<String, dynamic> toJson() => _$Mbc1ToJson(this);
+
   int _readRomFromBank(int addr) {
     final baseAddr = _romBank * 16 * 1024;
     final indexAddr = addr - 0x4000;
-    return _rom.data[baseAddr + indexAddr];
+    return rom.data[baseAddr + indexAddr];
   }
 
   int _readRamFromBank(int addr) {
@@ -93,7 +130,7 @@ class Mbc1 implements Mbc {
 
   @override
   int read(int addr) {
-    if (0x0000 <= addr && addr <= 0x3FFF) return _rom.data[addr];
+    if (0x0000 <= addr && addr <= 0x3FFF) return rom.data[addr];
     if (0x4000 <= addr && addr <= 0x7FFF) return _readRomFromBank(addr);
     if (0xA000 <= addr && addr <= 0xBFFF) return _readRamFromBank(addr);
 

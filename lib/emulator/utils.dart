@@ -1,3 +1,9 @@
+import 'dart:typed_data';
+
+import 'package:json_annotation/json_annotation.dart';
+
+part 'utils.g.dart';
+
 bool isSet(int val, int offset) {
   return val & (1 << offset) > 0;
 }
@@ -23,6 +29,7 @@ int decodeR(int opecode) {
   return (opecode >> 4) & 3;
 }
 
+@JsonSerializable()
 class Bit {
   Bit(this.val);
 
@@ -37,12 +44,15 @@ class Bit {
   void reset() {
     val = false;
   }
+
+  factory Bit.fromJson(Map<String, dynamic> json) => _$BitFromJson(json);
+  Map<String, dynamic> toJson() => _$BitToJson(this);
 }
 
 class BitFieldU8 {
-  BitFieldU8(Map<int, bool> _values)
+  BitFieldU8([Map<int, bool>? _values])
       : values = Map.fromEntries(
-            List.generate(8, (i) => MapEntry(i, Bit(_values[i] ?? false))));
+            List.generate(8, (i) => MapEntry(i, Bit(_values?[i] ?? false))));
 
   BitFieldU8.fromU8(int u8)
       : values = Map.fromEntries(
@@ -98,5 +108,19 @@ extension IntExt on int {
     if (!isSet(this, 7)) return this;
 
     return this - 0x0100;
+  }
+}
+
+class Uint8ListConverter implements JsonConverter<Uint8List, List<dynamic>> {
+  const Uint8ListConverter();
+
+  @override
+  Uint8List fromJson(List<dynamic> json) {
+    return Uint8List.fromList(json.whereType<int>().toList());
+  }
+
+  @override
+  List<dynamic> toJson(Uint8List object) {
+    return object.toList();
   }
 }
