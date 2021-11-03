@@ -121,7 +121,7 @@ class Mbc1 implements Mbc {
     if (0x4000 <= addr && addr <= 0x5FFF) {
       switch (_selectMode) {
         case Mbc1SelectMode.rom:
-          final bankHigh = max(val & 0x03, 1);
+          final bankHigh = val & 0x03;
 
           _romBank |= bankHigh << 5;
           break;
