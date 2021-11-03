@@ -13,6 +13,7 @@ enum MbcType {
   mmm01Ram,
   mmm01RamBattery,
   mbc3,
+  mbc3TimerRamBattery,
   mbc3Ram,
   mbc3RamBattery,
 }
@@ -42,6 +43,8 @@ extension MbcTypeExt on MbcType {
         return MbcType.mmm01Ram;
       case 0x0d:
         return MbcType.mmm01RamBattery;
+      case 0x10:
+        return MbcType.mbc3TimerRamBattery;
       case 0x11:
         return MbcType.mbc3;
       case 0x12:

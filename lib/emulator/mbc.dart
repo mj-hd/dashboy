@@ -15,6 +15,12 @@ abstract class Mbc {
       case MbcType.mbc1RamBattery:
         return Mbc1(rom);
 
+      case MbcType.mbc3:
+      case MbcType.mbc3TimerRamBattery:
+      case MbcType.mbc3Ram:
+      case MbcType.mbc3RamBattery:
+        return Mbc3(rom);
+
       default:
         throw ArgumentError.value(rom.mbcType);
     }
@@ -141,6 +147,94 @@ class Mbc1 implements Mbc {
       } else {
         _selectMode = Mbc1SelectMode.rom;
       }
+      return;
+    }
+
+    _writeRamIntoBank(addr, val);
+  }
+}
+
+class Mbc3 implements Mbc {
+  Mbc3(this._rom);
+
+  final Rom _rom;
+  final List<int> _ram = List.filled(32 * 1024, 0, growable: false);
+  int _romBank = 1;
+  int _ramBank = 0;
+
+  bool _enableRam = true;
+
+  int _readRomFromBank(int addr) {
+    final baseAddr = _romBank * 16 * 1024;
+    final indexAddr = addr - 0x4000;
+    return _rom.data[baseAddr + indexAddr];
+  }
+
+  int _readRamOrRTCFromBank(int addr) {
+    if (!_enableRam) {
+      print("disabled ram read");
+      return 0;
+    }
+
+    if (_ramBank > 0x03) {
+      // TODO
+      return 0;
+    }
+
+    final baseAddr = _ramBank * 8 * 1024;
+    final indexAddr = addr - 0xA000;
+    return _ram[baseAddr + indexAddr];
+  }
+
+  void _writeRamIntoBank(int addr, int val) {
+    if (!_enableRam) {
+      print("disabled ram write");
+      return;
+    }
+
+    if (_ramBank > 0x03) {
+      // TODO
+      return;
+    }
+
+    final baseAddr = _ramBank * 8 * 1024;
+    final indexAddr = addr - 0xA000;
+
+    _ram[baseAddr + indexAddr] = val;
+  }
+
+  @override
+  int read(int addr) {
+    if (0x0000 <= addr && addr <= 0x3FFF) return _rom.data[addr];
+    if (0x4000 <= addr && addr <= 0x7FFF) return _readRomFromBank(addr);
+    if (0xA000 <= addr && addr <= 0xBFFF) return _readRamOrRTCFromBank(addr);
+
+    return 0;
+  }
+
+  @override
+  void write(int addr, int val) {
+    if (0x0000 <= addr && addr <= 0x1FFF) {
+      if ((val & 0x0F) == 0x0A) {
+        _enableRam = true;
+      } else {
+        _enableRam = false;
+      }
+      return;
+    }
+
+    if (0x2000 <= addr && addr <= 0x3FFF) {
+      _romBank = max(val, 1);
+      return;
+    }
+
+    if (0x4000 <= addr && addr <= 0x5FFF) {
+      _ramBank = val;
+      return;
+    }
+
+    if (0x6000 <= addr && addr <= 0x7FFF) {
+      // TODO Latch Lock Data
       return;
     }
 
